@@ -2,7 +2,6 @@
 #include "json_string.h"
 #include "json_number.h"
 //TODO FREE MEMORY WHEN ERROR OCCURS
-
 typedef struct object object;
 struct object
 {
@@ -17,8 +16,13 @@ struct object
 };
 
 unsigned int parse_object(unsigned char*, object*, unsigned int, unsigned int*);
+object* parse_array(unsigned char*, unsigned int);
+unsigned char* parse_value(unsigned char*, int* value_id, unsigned int*, unsigned int, unsigned int*);
+unsigned char* get_string(unsigned char*, int*, unsigned int);
+unsigned int find_bracket_pair_array(unsigned char*, unsigned int);
+unsigned int find_bracket_pair_object(unsigned char*, unsigned int, unsigned int*);
 
-unsigned int find_bracket_pair_object(unsigned char* stream, unsigned int length_of_stream)
+unsigned int find_bracket_pair_object(unsigned char* stream, unsigned int length_of_stream, unsigned int* end_position)
 {
 	unsigned int number_of_opened_brackets = 1;
 	unsigned int position = 0;
@@ -57,10 +61,15 @@ unsigned int find_bracket_pair_object(unsigned char* stream, unsigned int length
 				break;
 		}
 	}
-	return position;
+	if (position == length_of_stream)
+	{
+		return ERROR_WRONG_JSON_STRUCTURE;
+	}
+	*end_position = position;
+	return RETURN_OK;
 }
 
-unsigned int find_bracket_pair_array(unsigned char* stream, int length_of_stream)
+unsigned int find_bracket_pair_array(unsigned char* stream, unsigned int length_of_stream)
 {
 	unsigned int number_of_opened_brackets = 1;
 	unsigned int position = 0;
@@ -346,6 +355,10 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length)
 unsigned int parse_object(unsigned char* stream, object* json_object, unsigned int length_of_stream, unsigned int* end_pos)
 {
 	json_object->obj = NULL;
+	unsigned int position_name_end;
+	unsigned int value_id = 0;
+	unsigned int position_value_end = 1;
+	unsigned int length_of_string = 0;
 	unsigned int counter = 0;
 	while (stream[counter] != '{' && counter < length_of_stream && stream[counter] <= 32)
 	{
@@ -356,13 +369,29 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 		return ERROR_WRONG_JSON_STRUCTURE;
 	}
 
-	unsigned int end_bracket_position = find_bracket_pair_object(stream + counter, length_of_stream - counter);
+	unsigned int end_bracket_position;
+	if (find_bracket_pair_object(stream + counter, length_of_stream - counter, &end_bracket_position) != RETURN_OK)
+	{
+		return ERROR_WRONG_JSON_STRUCTURE;
+	}
+
+	unsigned int is_object_empty = 1;
+	for (unsigned int i = 1; i < end_bracket_position - counter; i++)
+	{
+		if (stream[counter + i] > 32)
+		{
+			is_object_empty = 0;
+			break;
+		}
+	}
+
 	while (1)
 	{
 		json_object->obj = (object*)realloc(json_object->obj, ++json_object->number_of_values * sizeof(object));
 		if (json_object->obj == NULL)
 		{
 			free(json_object->obj);
+			json_object->obj = NULL;
 			return ERROR_CAN_NOT_ALLOCATE_MEMORY;
 		}
 
@@ -372,90 +401,105 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 		((json_object->obj)[json_object->number_of_values - 1]).value_float = 0.0;
 		((json_object->obj)[json_object->number_of_values - 1]).value_identifier = DEFAULT_VALUE;
 		((json_object->obj)[json_object->number_of_values - 1]).value_string = NULL;
-		((json_object->obj)[json_object->number_of_values - 1]).value_int = 0;
-		//todo object can be empty
-		unsigned int position_name_end;
-		unsigned char* name = get_string(stream + counter + 1, &position_name_end, length_of_stream - counter - 1);
-		if (name == NULL)
-		{
-			return ERROR_FAIL_GET_NAME;
-		}
-		position_name_end += counter + 2;
-		((json_object->obj)[json_object->number_of_values -1]).name = name;
+		((json_object->obj)[json_object->number_of_values - 1]).value_int = 0;		
 
-		while (stream[position_name_end] <= 32)
+		if (is_object_empty == 1) 
 		{
-			position_name_end++;
+			((json_object->obj)[json_object->number_of_values - 1]).value_identifier = EMPTY_OBJECT;
 		}
-		if (stream[position_name_end] != ':')
-		{
-			return ERROR_WRONG_JSON_STRUCTURE;
-		}
+		else
+		{			
+			unsigned char* name = get_string(stream + counter + 1, &position_name_end, length_of_stream - counter - 1);
+			if (name == NULL)
+			{
+				return ERROR_FAIL_GET_NAME;
+			}
+			position_name_end += counter + 2;
+			((json_object->obj)[json_object->number_of_values - 1]).name = name;
 
-		unsigned int value_id = 0;
-		unsigned int position_value_end;
-		unsigned int length_of_string = 0;
-		unsigned char* value_as_string = parse_value(stream + position_name_end + 1, &value_id, &position_value_end, length_of_stream - (position_name_end + 1), &length_of_string);
-		if (value_as_string == NULL && value_id != VALUE_NULL)
-		{
-			return ERROR_FAIL_GET_NAME;
-		}
-		position_value_end += position_name_end;
-		((json_object->obj)[json_object->number_of_values - 1]).value_identifier = value_id;
-		unsigned char* ouput = NULL;//output from string validation function
-		switch (value_id)
-		{
-		case STRING:
-			//add matej's function
-			//input == value_as_string
-			//length
-			((json_object->obj)[json_object->number_of_values - 1]).value_string = value_as_string;
-			break;
-		case NUMBER:
-			//todo add function matej's number validator
-			((json_object->obj)[json_object->number_of_values - 1]).value_string = value_as_string;
-			break;
-		case BOOL:
-			if (memcmp(value_as_string, "true", 4) == 0)
+			while (stream[position_name_end] <= 32)
 			{
-				((json_object->obj)[json_object->number_of_values - 1]).value_bool = TRUE;
+				position_name_end++;
 			}
-			else if (memcmp(value_as_string, "false", 5) == 0)
-			{
-				((json_object->obj)[json_object->number_of_values - 1]).value_bool = FALSE;
-			}
-			else
+			if (stream[position_name_end] != ':')
 			{
 				return ERROR_WRONG_JSON_STRUCTURE;
 			}
-			break;
-		case ARRAY:
-			((json_object->obj)[json_object->number_of_values - 1]).obj = parse_array(value_as_string, length_of_string);//todo check error codes
-			break;
-		case OBJECT:
-			parse_object(value_as_string, &((json_object->obj)[json_object->number_of_values - 1]), length_of_stream, &position_value_end); //todo check error codes
-			break;
-		case VALUE_NULL:
-			if (value_as_string != NULL)
+			
+			unsigned char* value_as_string = parse_value(stream + position_name_end + 1, &value_id, &position_value_end, length_of_stream - (position_name_end + 1), &length_of_string);
+			if (value_as_string == NULL && value_id != VALUE_NULL)
 			{
-				return ERROR_WRONG_JSON_STRUCTURE;
+				return ERROR_FAIL_GET_NAME;
 			}
-			break;
-		default:
-			break;
+			position_value_end += position_name_end;
+			((json_object->obj)[json_object->number_of_values - 1]).value_identifier = value_id;
+			unsigned char* ouput = NULL;//output from string validation function
+			switch (value_id)
+			{
+			case STRING:
+				//add matej's function
+				//input == value_as_string
+				//length
+				((json_object->obj)[json_object->number_of_values - 1]).value_string = value_as_string;
+				break;
+			case NUMBER:
+				//todo add function matej's number validator
+				((json_object->obj)[json_object->number_of_values - 1]).value_string = value_as_string;
+				break;
+			case BOOL:
+				if (memcmp(value_as_string, "true", 4) == 0)
+				{
+					((json_object->obj)[json_object->number_of_values - 1]).value_bool = TRUE;
+				}
+				else if (memcmp(value_as_string, "false", 5) == 0)
+				{
+					((json_object->obj)[json_object->number_of_values - 1]).value_bool = FALSE;
+				}
+				else
+				{
+					return ERROR_WRONG_JSON_STRUCTURE;
+				}
+				break;
+			case ARRAY:
+				((json_object->obj)[json_object->number_of_values - 1]).obj = parse_array(value_as_string, length_of_string);//todo check error codes
+				break;
+			case OBJECT:
+				parse_object(value_as_string, &((json_object->obj)[json_object->number_of_values - 1]), length_of_stream, &position_value_end); //todo check error codes
+				break;
+			case VALUE_NULL:
+				if (value_as_string != NULL)
+				{
+					return ERROR_WRONG_JSON_STRUCTURE;
+				}
+				break;
+			default:
+				break;
+			}
 		}
-		//add control
+		
+		
 		counter = position_value_end + 1;
 		while (stream[counter] != '}' && stream[counter] != ',' && counter < length_of_stream)
 		{
 			counter++;
 		}
+		if (counter == length_of_stream)
+		{
+			return ERROR_WRONG_JSON_STRUCTURE;
+		}
+
 		if (stream[counter] == '}')
 		{
 			*end_pos += counter + 1;
-			return;
+			return RETURN_OK;
 		}
 	}
+	return ERROR_WRONG_JSON_STRUCTURE;
+}
+
+void free_object_memory(object* obj)
+{
+
 }
 
 int main()
@@ -476,17 +520,21 @@ int main()
 	FILE* file;
 	fopen_s(&file, "jsonExample.txt", "rb");
 	fseek(file, 0L, SEEK_END);
-	unsigned int sz = ftell(file); //todo integer can overflow when file has more bytes then size of unsigned int
+	unsigned int sz = ftell(file); 
 	fseek(file, 0L, SEEK_SET);
 	rewind(file);
 	stream = (unsigned char*)malloc((sz + 1) * sizeof(char));
 	memset(stream, '\0', sz + 1);
 	fread_s(stream, sz, 1, sz, file);
+	fclose(file);
 	unsigned int position_of_last_character;
-	parse_object(stream, &json_object, sz, &position_of_last_character);
+	if (parse_object(stream, &json_object, sz, &position_of_last_character) != RETURN_OK)
+	{
+		free_object_memory(&json_object);
+	}
 	printf("%s", stream);
 	free(stream);
-	fclose(file);
+	free_object_memory(&json_object);
 	getchar();
 
     return 0;
