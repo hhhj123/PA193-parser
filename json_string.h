@@ -1,9 +1,10 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "json_defines.h"
 
-#define RETURN_OK         0
-#define INVALID_INPUT     1
-#define INVALID_STRING    2
-
-int parse_string(char*, char*, int);
+/**
+ * \brief checks validity of given json string
+ * \param in input - unvalidated json string, without quotation marks (can be changed if necessary)
+ * \param out - output buffer. Should be at least (length + 1) long (for 0 at the end).
+ * \param length - length of input. If bad value, parsing returns error.
+ * \return RETURN_OK if successful, other errors if validation failed
+ */
+int validate_string(char*, char*, int);

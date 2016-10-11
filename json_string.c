@@ -1,20 +1,13 @@
 #include "json_string.h"
 
-/**
- * \brief checks validity of given json string
- * \param in input - unvalidated json string, without quotation marks (can be changed if necessary)
- * \param out - output buffer. Should be at least (length + 1) long (for 0 at the end).
- * \param length - length of input. If bad value, parsing returns error.
- * \return RETURN_OK if successful, other errors if validation failed
- */
-int parse_string(char* in, char* out, int length)
+int validate_string(char* in, char* out, int length)
 {
     if (strlen(in) != length)
         return INVALID_INPUT;
 
-    char esc = 0; //Boolean flag for escaping character
-    char c;       //input buffer character
-    int offset = 0; //offset created by "\" characters
+    char esc = 0;    //Boolean flag for escaping character
+    char c;          //input buffer character
+    int offset = 0;  //offset created by "\" characters
 
     memset(out, 0, length + 1); //wipe the memory, prepare the ending zero characters
 
