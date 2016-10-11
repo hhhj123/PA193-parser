@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-
+//TODO FREE MEMORY WHEN ERROR OCCURS
 #define DEFAULT_VALUE 0
 #define STRING 1
 #define FLOAT 2
@@ -181,7 +181,7 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 		return NULL;
 	}
 
-	if ((stream[counter] > '0' && stream[counter] <= '9') || stream[counter] != '-')
+	if ((stream[counter] > '0' && stream[counter] <= '9') || stream[counter] == '-')
 	{
 		is_number = 1;
 	}	
@@ -288,7 +288,7 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length)
 		if (obj == NULL)
 		{
 			free(obj);
-			//return ERROR;
+			return NULL;
 		}
 
 		(obj[number_of_values - 1]).obj = NULL;
@@ -301,11 +301,13 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length)
 
 		unsigned int value_id = 0;		
 		unsigned int length_of_string = 0;
-		unsigned char* value_as_string = parse_value(value_as_string_input + position_value_end + 1, &value_id, &position_value_end, length - position_value_end, &length_of_string);
+		unsigned int local_position_value_end = 0;
+		unsigned char* value_as_string = parse_value(value_as_string_input + position_value_end + 1, &value_id, &local_position_value_end, length - position_value_end, &length_of_string);
 		if (value_as_string == NULL)
 		{
-			//return ERROR
+			return NULL;
 		}
+		position_value_end += local_position_value_end;
 		(obj[number_of_values - 1]).value_identifier = value_id;
 
 		switch (value_id)
@@ -335,7 +337,7 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length)
 		case VALUE_NULL:
 			if (value_as_string != NULL)
 			{
-				return error
+				return NULL;
 			}
 			break;
 		default:
@@ -347,8 +349,12 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length)
 		{
 			counter++;
 		}
+		if (counter == length)
+		{
+			return NULL;
+		}
 		position_value_end = counter;
-		if (value_as_string[counter] == ']')
+		if (value_as_string_input[counter] == ']')
 		{
 			return obj;
 		}
@@ -382,7 +388,7 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 		((json_object->obj)[json_object->number_of_values - 1]).number_of_values = 0;
 		((json_object->obj)[json_object->number_of_values - 1]).value_bool = 0;
 		((json_object->obj)[json_object->number_of_values - 1]).value_float = 0.0;
-		((json_object->obj)[json_object->number_of_values - 1]).value_identifier = 0;
+		((json_object->obj)[json_object->number_of_values - 1]).value_identifier = DEFAULT_VALUE;
 		((json_object->obj)[json_object->number_of_values - 1]).value_string = NULL;
 		((json_object->obj)[json_object->number_of_values - 1]).value_int = 0;
 		//todo object can be empty
@@ -408,7 +414,7 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 		unsigned int position_value_end;
 		unsigned int length_of_string = 0;
 		unsigned char* value_as_string = parse_value(stream + position_name_end + 1, &value_id, &position_value_end, length_of_stream - (position_name_end + 1), &length_of_string);
-		if (value_as_string == NULL)
+		if (value_as_string == NULL && value_id != VALUE_NULL)
 		{
 			return ERROR_FAIL_GET_NAME;
 		}
@@ -477,7 +483,7 @@ int main()
 	json_object.number_of_values = 0;
 	json_object.value_bool = 0;
 	json_object.value_float = 0.0;
-	json_object.value_identifier = 0;
+	json_object.value_identifier = DEFAULT_VALUE;
 	json_object.value_string = NULL;
 	json_object.value_int = 0;
 	json_object.name = malloc(12);
