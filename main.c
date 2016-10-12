@@ -9,18 +9,19 @@ struct object
 	int value_identifier;
 	unsigned char* name;
 	unsigned char* value_string;
-	float value_float;
-	long value_int;
+	double value_double;
+	long int value_int;
 	short value_bool;
 	object* obj;
 };
 
 unsigned int parse_object(unsigned char*, object*, unsigned int, unsigned int*);
-object* parse_array(unsigned char*, unsigned int);
+object* parse_array(unsigned char*, unsigned int, unsigned int*);
 unsigned char* parse_value(unsigned char*, int* value_id, unsigned int*, unsigned int, unsigned int*);
 unsigned char* get_string(unsigned char*, int*, unsigned int);
 unsigned int find_bracket_pair_array(unsigned char*, unsigned int);
 unsigned int find_bracket_pair_object(unsigned char*, unsigned int, unsigned int*);
+void free_object_memory(object*);
 
 unsigned int find_bracket_pair_object(unsigned char* stream, unsigned int length_of_stream, unsigned int* end_position)
 {
@@ -141,7 +142,7 @@ unsigned char* get_string(unsigned char* stream, int* position_name_end, unsigne
 
 	memcpy(name, stream + counter + 1, position - counter - 1);
 	name[position - counter - 1] = '\0';
-	*position_name_end = position;
+	*position_name_end = position - 1;
 
 	return name;
 }
@@ -149,7 +150,7 @@ unsigned char* get_string(unsigned char* stream, int* position_name_end, unsigne
 unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* position_value_end, unsigned int length_of_stream, unsigned int* length_of_string) //todo add parameter length of stream
 {
 	unsigned int counter = 0;
-	unsigned int is_number = 0;
+	
 	while (stream[counter] <= 32 && counter < length_of_stream)
 	{
 		counter++;
@@ -174,20 +175,28 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 
 	if ((stream[counter] > '0' && stream[counter] <= '9') || stream[counter] == '-')
 	{
-		is_number = 1;
-	}
-
-	if (is_number == 1)//todo parse number
-	{
 		unsigned int number_of_digits = 0;
-		while (stream[counter + number_of_digits] > '0' && stream[counter + number_of_digits] <= '9')
+		*value_id = NUMBER;
+		while (((stream[counter + number_of_digits] > '0' && stream[counter + number_of_digits] <= '9') || stream[counter + number_of_digits] == '-'
+																										|| stream[counter + number_of_digits] == '+'
+																										|| stream[counter + number_of_digits] == '.'
+																										|| stream[counter + number_of_digits] == 'E'
+																										|| stream[counter + number_of_digits] == 'e') && stream[counter + number_of_digits] < length_of_stream)
 		{
 			number_of_digits++;
 		}
+		if (stream[counter + number_of_digits] == length_of_stream)
+		{
+			return NULL;
+		}
 		unsigned char* number = malloc(number_of_digits + 1);
+		if (number == NULL)
+		{
+			return NULL;
+		}
 		memcpy(number, stream + counter, number_of_digits);
-		number[number_of_digits] = '\0';
-		*value_id = NUMBER;
+		number[number_of_digits] = '\0';		
+		*length_of_string = number_of_digits;
 		*position_value_end = counter + number_of_digits;
 		return number;
 	}
@@ -197,6 +206,11 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 		case '\"':
 			*value_id = STRING;
 			unsigned char* value_string = get_string(stream + counter, position_value_end, length_of_stream - counter);
+			if (value_string == NULL)
+			{
+				return NULL;
+			}
+			*length_of_string = *position_value_end - counter + 1;
 			*position_value_end += counter;
 			return value_string;
 			break;
@@ -208,19 +222,28 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 		case '[':
 			*value_id = ARRAY;
 			unsigned int end_array_bracket = find_bracket_pair_array(stream + counter, length_of_stream - counter);
+
 			*position_value_end = counter + end_array_bracket;
 			unsigned char* array_as_string = malloc(end_array_bracket + 2);
+			if (array_as_string == NULL)
+			{
+				return NULL;
+			}
+
 			memcpy(array_as_string, stream + counter, end_array_bracket + 1);
 			array_as_string[end_array_bracket + 1] = '\0';
 			*length_of_string = end_array_bracket + 1;
 			return array_as_string;
 			break;
-		case 't':
-			//todo check if length of string in memcmp would not overflow
+		case 't':			
 			if (memcmp(stream + counter, "true", 4) == 0)
 			{
 				*value_id = BOOL;
 				unsigned char* value = malloc(5);
+				if (value == NULL)
+				{
+					return NULL;
+				}
 				memcpy(value, "true", 4);
 				value[4] = '\0';
 				*position_value_end = counter + 4;
@@ -231,12 +254,15 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 				return NULL;
 			}
 			break;
-		case 'f':
-			//todo check if length of string in memcmp would not overflow
+		case 'f':			
 			if (memcmp(stream + counter, "false", 5) == 0)
 			{
 				*value_id = BOOL;
 				unsigned char* value = malloc(6);
+				if (value == NULL)
+				{
+					return NULL;
+				}
 				memcpy(value, "false", 5);
 				value[5] = '\0';
 				*position_value_end = counter + 5;
@@ -247,8 +273,7 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 				return NULL;
 			}
 			break;
-		case 'n':
-			//todo check if length of string in memcmp would not overflow
+		case 'n':			
 			if (!memcmp(stream + counter, "null", 4))
 			{
 				*value_id = VALUE_NULL;
@@ -267,28 +292,30 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 	return NULL;
 }
 
-object* parse_array(unsigned char* value_as_string_input, unsigned int length)
+object* parse_array(unsigned char* value_as_string_input, unsigned int length, unsigned int* number_of_values)
 {
 	object* obj = NULL;
 	unsigned int counter = 0;
-	unsigned int number_of_values = 0;
+	*number_of_values = 0;
 	unsigned int position_value_end = 0;
+	unsigned int error_code = 0;
+	unsigned char* output;
 	while (1)
 	{
-		obj = (object*)realloc(obj, ++number_of_values * sizeof(object));
+		obj = (object*)realloc(obj, ++(*number_of_values) * sizeof(object));
 		if (obj == NULL)
 		{
 			free(obj);
 			return NULL;
 		}
 
-		(obj[number_of_values - 1]).obj = NULL;
-		(obj[number_of_values - 1]).number_of_values = 0;
-		(obj[number_of_values - 1]).value_bool = 0;
-		(obj[number_of_values - 1]).value_float = 0.0;
-		(obj[number_of_values - 1]).value_identifier = 0;
-		(obj[number_of_values - 1]).value_string = NULL;
-		(obj[number_of_values - 1]).value_int = 0;
+		(obj[(*number_of_values) - 1]).obj = NULL;
+		(obj[(*number_of_values) - 1]).number_of_values = 0;
+		(obj[(*number_of_values) - 1]).value_bool = 0;
+		(obj[(*number_of_values) - 1]).value_double = 0.0;
+		(obj[(*number_of_values) - 1]).value_identifier = 0;
+		(obj[(*number_of_values) - 1]).value_string = NULL;
+		(obj[(*number_of_values) - 1]).value_int = 0;
 
 		unsigned int value_id = 0;
 		unsigned int length_of_string = 0;
@@ -299,31 +326,62 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length)
 			return NULL;
 		}
 		position_value_end += local_position_value_end;
-		(obj[number_of_values - 1]).value_identifier = value_id;
+		(obj[(*number_of_values) - 1]).value_identifier = value_id;
 
 		switch (value_id)
 		{
-		case STRING:
-			(obj[number_of_values - 1]).value_string = value_as_string;
+		case STRING:			
+			output = malloc(length_of_string + 1);
+			if (output == NULL)
+			{
+				free(value_as_string);
+				return ERROR_CAN_NOT_ALLOCATE_MEMORY;
+			}
+			if (validate_string(value_as_string, output, length_of_string) != RETURN_OK)
+			{
+				free(value_as_string);
+				return ERROR_WRONG_JSON_STRUCTURE;
+			}
+			(obj[(*number_of_values) - 1]).value_string = output;
+			free(value_as_string);
 			break;
 		case NUMBER:
-			(obj[number_of_values - 1]).value_string = value_as_string;
+			error_code = validate_number(value_as_string, &((obj[(*number_of_values) - 1]).value_double), &((obj[(*number_of_values) - 1]).value_int), length_of_string);
+			if (error_code != DOUBLE || error_code != LONG_INT)
+			{
+				free(value_as_string);
+				return error_code;
+			}
+
+			free(value_as_string);
 			break;
 		case BOOL:
 			if (memcmp(value_as_string, "true", 4) == 0)
 			{
-				(obj[number_of_values - 1]).value_bool = TRUE;
+				(obj[(*number_of_values) - 1]).value_bool = TRUE;
 			}
 			else if (memcmp(value_as_string, "false", 5) == 0)
 			{
-				(obj[number_of_values - 1]).value_bool = FALSE;
+				(obj[(*number_of_values) - 1]).value_bool = FALSE;
 			}
+			else
+			{
+				return ERROR_WRONG_JSON_STRUCTURE;
+			}			
 			break;
 		case ARRAY:
-			(obj[number_of_values - 1]).obj = parse_array(value_as_string, length_of_string);
+			(obj[(*number_of_values) - 1]).obj = parse_array(value_as_string, length_of_string, &(obj[(*number_of_values) - 1]).number_of_values);
+			if ((obj[(*number_of_values) - 1]).obj == NULL)
+			{
+				free(value_as_string);
+				return ERROR_WRONG_JSON_STRUCTURE;
+			}
 			break;
 		case OBJECT:
-			parse_object(value_as_string, &(obj[number_of_values - 1]), length, &position_value_end);
+			if (parse_object(value_as_string, &(obj[(*number_of_values) - 1]), length, &position_value_end) != RETURN_OK)
+			{
+				return ERROR_WRONG_JSON_STRUCTURE;
+			}
 			break;
 		case VALUE_NULL:
 			if (value_as_string != NULL)
@@ -360,6 +418,7 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 	unsigned int position_value_end = 1;
 	unsigned int length_of_string = 0;
 	unsigned int counter = 0;
+	unsigned int error_code = DEFAULT_VALUE;
 	while (stream[counter] != '{' && counter < length_of_stream && stream[counter] <= 32)
 	{
 		counter++;
@@ -398,7 +457,7 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 		((json_object->obj)[json_object->number_of_values - 1]).obj = NULL;
 		((json_object->obj)[json_object->number_of_values - 1]).number_of_values = 0;
 		((json_object->obj)[json_object->number_of_values - 1]).value_bool = 0;
-		((json_object->obj)[json_object->number_of_values - 1]).value_float = 0.0;
+		((json_object->obj)[json_object->number_of_values - 1]).value_double = 0.0;
 		((json_object->obj)[json_object->number_of_values - 1]).value_identifier = DEFAULT_VALUE;
 		((json_object->obj)[json_object->number_of_values - 1]).value_string = NULL;
 		((json_object->obj)[json_object->number_of_values - 1]).value_int = 0;		
@@ -417,11 +476,11 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 			position_name_end += counter + 2;
 			((json_object->obj)[json_object->number_of_values - 1]).name = name;
 
-			while (stream[position_name_end] <= 32)
+			while (stream[position_name_end] <= 32 && position_name_end != length_of_stream)
 			{
 				position_name_end++;
 			}
-			if (stream[position_name_end] != ':')
+			if ((stream[position_name_end] != ':') || (position_name_end == length_of_stream))
 			{
 				return ERROR_WRONG_JSON_STRUCTURE;
 			}
@@ -433,18 +492,34 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 			}
 			position_value_end += position_name_end;
 			((json_object->obj)[json_object->number_of_values - 1]).value_identifier = value_id;
-			unsigned char* ouput = NULL;//output from string validation function
+			unsigned char* output = NULL;
+			
 			switch (value_id)
 			{
 			case STRING:
-				//add matej's function
-				//input == value_as_string
-				//length
-				((json_object->obj)[json_object->number_of_values - 1]).value_string = value_as_string;
+				output = malloc(length_of_string + 1);
+				if (output == NULL)
+				{
+					free(value_as_string);
+					return ERROR_CAN_NOT_ALLOCATE_MEMORY;
+				}
+				if (validate_string(value_as_string, output, length_of_string) != RETURN_OK)
+				{
+					free(value_as_string);
+					return ERROR_WRONG_JSON_STRUCTURE;
+				}
+				((json_object->obj)[json_object->number_of_values - 1]).value_string = output;
+				free(value_as_string);
 				break;
 			case NUMBER:
-				//todo add function matej's number validator
-				((json_object->obj)[json_object->number_of_values - 1]).value_string = value_as_string;
+				error_code = validate_number(value_as_string, &(((json_object->obj)[json_object->number_of_values - 1]).value_double), &(((json_object->obj)[json_object->number_of_values - 1]).value_int), length_of_string);
+				if (error_code != DOUBLE || error_code != LONG_INT)
+				{
+					free(value_as_string);
+					return error_code;
+				}
+
+				free(value_as_string);
 				break;
 			case BOOL:
 				if (memcmp(value_as_string, "true", 4) == 0)
@@ -461,10 +536,18 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 				}
 				break;
 			case ARRAY:
-				((json_object->obj)[json_object->number_of_values - 1]).obj = parse_array(value_as_string, length_of_string);//todo check error codes
+				((json_object->obj)[json_object->number_of_values - 1]).obj = parse_array(value_as_string, length_of_string, &((json_object->obj)[json_object->number_of_values - 1]).number_of_values);
+				if (((json_object->obj)[json_object->number_of_values - 1]).obj == NULL)
+				{
+					free(value_as_string);
+					return ERROR_WRONG_JSON_STRUCTURE;
+				}				
 				break;
 			case OBJECT:
-				parse_object(value_as_string, &((json_object->obj)[json_object->number_of_values - 1]), length_of_stream, &position_value_end); //todo check error codes
+				if (parse_object(value_as_string, &((json_object->obj)[json_object->number_of_values - 1]), length_of_stream, &position_value_end) != RETURN_OK)
+				{
+					return ERROR_WRONG_JSON_STRUCTURE;
+				}				
 				break;
 			case VALUE_NULL:
 				if (value_as_string != NULL)
@@ -475,8 +558,7 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 			default:
 				break;
 			}
-		}
-		
+		}		
 		
 		counter = position_value_end + 1;
 		while (stream[counter] != '}' && stream[counter] != ',' && counter < length_of_stream)
@@ -499,7 +581,21 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 
 void free_object_memory(object* obj)
 {
-
+	if (obj->value_identifier == ARRAY || obj->value_identifier == OBJECT)
+	{
+		int i = 0;
+		for (i = 0; i < obj->number_of_values; i++)
+		{
+			free_object_memory(&(obj->obj[i]));
+		}
+	}
+	
+	free(obj->name);
+	free(obj->obj);
+	free(obj->value_string);
+	obj->name = NULL;
+	obj->obj = NULL;
+	obj->value_string = NULL;
 }
 
 int main()
@@ -508,11 +604,16 @@ int main()
 	json_object.obj = NULL;
 	json_object.number_of_values = 0;
 	json_object.value_bool = 0;
-	json_object.value_float = 0.0;
-	json_object.value_identifier = DEFAULT_VALUE;
+	json_object.value_double = 0.0;
+	json_object.value_identifier = OBJECT;
 	json_object.value_string = NULL;
 	json_object.value_int = 0;
 	json_object.name = malloc(12);
+	if (json_object.name == NULL)
+	{
+		return ERROR_CAN_NOT_ALLOCATE_MEMORY;
+	}
+
 	char name[] = "main_object\0";
 	memcpy(json_object.name, name, 12);
     printf("JSON Parser!\n");
@@ -530,9 +631,11 @@ int main()
 	unsigned int position_of_last_character;
 	if (parse_object(stream, &json_object, sz, &position_of_last_character) != RETURN_OK)
 	{
+		printf("Problem occured!\n");
 		free_object_memory(&json_object);
+		return 1;
 	}
-	printf("%s", stream);
+	printf("PARSING SUCCESSFUL !\n");
 	free(stream);
 	free_object_memory(&json_object);
 	getchar();
