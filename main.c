@@ -342,12 +342,12 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 			if (output == NULL)
 			{
 				free(value_as_string);
-				return ERROR_CAN_NOT_ALLOCATE_MEMORY;
+				return NULL;
 			}
 			if (validate_string(value_as_string, output, length_of_string) != RETURN_OK)
 			{
 				free(value_as_string);
-				return ERROR_WRONG_JSON_STRUCTURE;
+				return NULL;
 			}
 			(obj[(*number_of_values) - 1]).value_string = output;
 			free(value_as_string);
@@ -357,7 +357,7 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 			if (error_code != DOUBLE || error_code != LONG_INT)
 			{
 				free(value_as_string);
-				return error_code;
+				return NULL;
 			}
 
 			free(value_as_string);
@@ -373,7 +373,7 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 			}
 			else
 			{
-				return ERROR_WRONG_JSON_STRUCTURE;
+				return NULL;
 			}
 			break;
 		case ARRAY:
@@ -381,13 +381,13 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 			if ((obj[(*number_of_values) - 1]).obj == NULL)
 			{
 				free(value_as_string);
-				return ERROR_WRONG_JSON_STRUCTURE;
+				return NULL;
 			}
 			break;
 		case OBJECT:
 			if (parse_object(value_as_string, &(obj[(*number_of_values) - 1]), length, &position_value_end) != RETURN_OK)
 			{
-				return ERROR_WRONG_JSON_STRUCTURE;
+				return NULL;
 			}
 			break;
 		case VALUE_NULL:
@@ -627,7 +627,7 @@ int main()
 	printf("JSON Parser!\n");
 	unsigned char* stream;
 	FILE* file;
-	fopen_s(&file, "jsonExample.txt", "rb");
+	fopen_s(&file, "test01.json", "rb");
 	fseek(file, 0L, SEEK_END);
 	unsigned int sz = ftell(file);
 	fseek(file, 0L, SEEK_SET);
