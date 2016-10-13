@@ -25,9 +25,9 @@
         "size": 10000,
         "popup": {
             "menuitem": [
-            {"value": "true", "onclick": "CreateNewDoc()"},
-            {"value": "false", "onclick": "OpenDoc()"},
-            {"value": "null", "onclick": "CloseDoc()"}
+            {"value": true, "onclick": "CreateNewDoc()"},
+            {"value": false, "onclick": "OpenDoc()"},
+            {"value": null, "onclick": "CloseDoc()"}
             ]
         }
     }
