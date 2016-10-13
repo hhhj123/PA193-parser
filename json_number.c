@@ -27,8 +27,8 @@ int validate_number(char* in, double* outd, long int* outl, int length)
             case '7' :
             case '8' :
             case '9' :
-            case '-' :
-            case '+' : i++; break;
+            case '-' : i++; break;
+            case '+' :
             case '.' :
             case 'e' :
             case 'E' : flag_double = 1; i++; break;
