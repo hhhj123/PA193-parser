@@ -650,7 +650,32 @@ unsigned int json_parse(char* fileName)
 	printf("JSON Parser!\n");
 	unsigned char* stream;
 	FILE* file;
-	file = fopen(fileName, "rb");
+	fopen_s(&file, fileName, "rb");
+	if (file == NULL)
+	{
+		return ERROR_CAN_NOT_OPEN_FILE;
+	}
+
+	unsigned char data[2];
+	data[1] = '\0';
+	unsigned int data_counter = 0;
+	short possible_overflow = 0;
+	while (!feof(file))
+	{
+		if (data_counter == UINT_MAX)
+		{
+			possible_overflow = 1;
+			break;
+		}
+		fread(data, 1, 1, file);
+		data_counter++;
+	}
+	if (possible_overflow == 1)
+	{
+		fclose(file);
+		return UNDEFINED_ERROR;
+	}
+
 	fseek(file, 0L, SEEK_END);
 	unsigned int sz = ftell(file);
 	fseek(file, 0L, SEEK_SET);
