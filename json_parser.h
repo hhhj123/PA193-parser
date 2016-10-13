@@ -2,7 +2,6 @@
 #include "json_string.h"
 #include "json_number.h"
 
-
 /** \brief Structure in which we store the whole .json file, recursively. */
 typedef struct object object;
 struct object
@@ -72,3 +71,9 @@ unsigned int find_bracket_pair_object(unsigned char*, unsigned int, unsigned int
  * @param obj root object in the structure
  */
 void free_object_memory(object*);
+
+/**
+ * @brief invokes the parsing
+ * @param fileName name of json file to parse
+ */
+unsigned int json_parse(char*);
