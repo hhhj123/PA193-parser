@@ -1,8 +1,13 @@
 #include "json_parser.h"
 
-int main()
+int main(int argc, char *argv[])
 {
-    int ret = json_parse("test01.json");
+	if (argc < 2)
+	{
+		return 1;
+	}
+
+    int ret = json_parse(argv[1]);
 
     if(!ret)
         printf("PARSING SUCCESSFUL !\n");

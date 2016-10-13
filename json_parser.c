@@ -650,7 +650,7 @@ unsigned int json_parse(char* fileName)
 	printf("JSON Parser!\n");
 	unsigned char* stream;
 	FILE* file;
-	fopen_s(&file, fileName, "rb");
+	file = fopen(fileName, "rb");
 	if (file == NULL)
 	{
 		return ERROR_CAN_NOT_OPEN_FILE;
