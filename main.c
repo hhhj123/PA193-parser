@@ -35,10 +35,21 @@ unsigned int find_bracket_pair_object(unsigned char* stream, unsigned int length
 		{
 			is_string = 1;
 		}
-
-		if (is_string == 1 && stream[position] == '\"')
+		else if (is_string == 1 && stream[position] == '\"')
 		{
-			if (stream[position - 1] != '\\')
+			unsigned int back_track_position = position - 1;
+			unsigned int number_of_slashes = 0;
+			while (stream[back_track_position] == '\\' && back_track_position != 0)
+			{
+				back_track_position--;
+				number_of_slashes++;
+			}
+			if (back_track_position == 0)
+			{
+				return ERROR_WRONG_JSON_STRUCTURE;
+			}
+
+			if (number_of_slashes % 2 == 0)
 			{
 				is_string = 0;
 			}
@@ -82,10 +93,21 @@ unsigned int find_bracket_pair_array(unsigned char* stream, unsigned int length_
 		{
 			is_string = 1;
 		}
-
-		if (is_string == 1 && stream[position] == '\"')
+		else if (is_string == 1 && stream[position] == '\"')
 		{
-			if (stream[position - 1] != '\\')
+			unsigned int back_track_position = position - 1;
+			unsigned int number_of_slashes = 0;
+			while (stream[back_track_position] == '\\' && back_track_position != 0)
+			{
+				back_track_position--;
+				number_of_slashes++;
+			}
+			if (back_track_position == 0)
+			{
+				return ERROR_WRONG_JSON_STRUCTURE;
+			}
+
+			if (number_of_slashes % 2 == 0)
 			{
 				is_string = 0;
 			}
@@ -129,10 +151,31 @@ unsigned char* get_string(unsigned char* stream, int* position_name_end, unsigne
 	}
 
 	unsigned int position = counter + 1;
-	while ((stream[position] != '\"' || stream[position - 1] == '\\') && position < length_of_stream)
+
+	while (position < length_of_stream)
 	{
+		if (stream[position] == '\"')
+		{
+			unsigned int back_track_position = position - 1;
+			unsigned int number_of_slashes = 0;
+			while (stream[back_track_position] == '\\' && back_track_position != 0)
+			{
+				back_track_position--;
+				number_of_slashes++;
+			}
+			if (back_track_position == 0)
+			{
+				return NULL;
+			}
+
+			if (number_of_slashes % 2 == 0)
+			{
+				break;
+			}
+		}
 		position++;
 	}
+
 	if (position == length_of_stream)
 	{
 		return NULL;
@@ -185,11 +228,11 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 			|| stream[counter + number_of_digits] == '+'
 			|| stream[counter + number_of_digits] == '.'
 			|| stream[counter + number_of_digits] == 'E'
-			|| stream[counter + number_of_digits] == 'e') && stream[counter + number_of_digits] < length_of_stream)
+			|| stream[counter + number_of_digits] == 'e') && counter + number_of_digits < length_of_stream)
 		{
 			number_of_digits++;
 		}
-		if (stream[counter + number_of_digits] == length_of_stream)
+		if (counter + number_of_digits == length_of_stream)
 		{
 			return NULL;
 		}
@@ -201,7 +244,7 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 		memcpy(number, stream + counter, number_of_digits);
 		number[number_of_digits] = '\0';
 		*length_of_string = number_of_digits;
-		*position_value_end = counter + number_of_digits;
+		*position_value_end = counter + number_of_digits - 1;
 		return number;
 	}
 
@@ -521,7 +564,7 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 				break;
 			case NUMBER:
 				error_code = validate_number(value_as_string, &(((json_object->obj)[json_object->number_of_values - 1]).value_double), &(((json_object->obj)[json_object->number_of_values - 1]).value_int), length_of_string);
-				if (error_code != DOUBLE || error_code != LONG_INT)
+				if (error_code != DOUBLE && error_code != LONG_INT)
 				{
 					free(value_as_string);
 					return error_code;
@@ -591,7 +634,7 @@ void free_object_memory(object* obj)
 {
 	if (obj->value_identifier == ARRAY || obj->value_identifier == OBJECT)
 	{
-		int i = 0;
+		unsigned int i = 0;
 		for (i = 0; i < obj->number_of_values; i++)
 		{
 			free_object_memory(&(obj->obj[i]));
@@ -627,14 +670,14 @@ int main()
 	printf("JSON Parser!\n");
 	unsigned char* stream;
 	FILE* file;
-	fopen_s(&file, "test01.json", "rb");
+	file = fopen("test01.json", "rb");
 	fseek(file, 0L, SEEK_END);
 	unsigned int sz = ftell(file);
 	fseek(file, 0L, SEEK_SET);
 	rewind(file);
 	stream = (unsigned char*)malloc((sz + 1) * sizeof(char));
 	memset(stream, '\0', sz + 1);
-	fread_s(stream, sz, 1, sz, file);
+	fread(stream, 1, sz, file);
 	fclose(file);
 	unsigned int position_of_last_character;
 	if (parse_object(stream, &json_object, sz, &position_of_last_character) != RETURN_OK)
