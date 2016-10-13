@@ -1,0 +1,7 @@
+{"extra double quotes in string": {
+  "popup": {
+    "menuitem": [
+      {"value": "New"", "onclick": "CreateNewDoc()"},
+    ]
+  }
+}} 

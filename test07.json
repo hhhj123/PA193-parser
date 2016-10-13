@@ -1,0 +1,11 @@
+{"plus in front of number": {
+    "header": "Numbers",
+    "items": [
+        {"int": +451817},
+        {"double": -41561.154, "double2": 0.1524},
+        null,
+        {"exp": 123e+15, "Exp": 0.25E-2},
+        {},
+        null
+    ]
+}} 
