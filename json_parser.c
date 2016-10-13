@@ -24,10 +24,6 @@ unsigned int find_bracket_pair_object(unsigned char* stream, unsigned int length
 				back_track_position--;
 				number_of_slashes++;
 			}
-			if (back_track_position == 0)
-			{
-				return ERROR_WRONG_JSON_STRUCTURE;
-			}
 
 			if (number_of_slashes % 2 == 0)
 			{
@@ -81,10 +77,6 @@ unsigned int find_bracket_pair_array(unsigned char* stream, unsigned int length_
 			{
 				back_track_position--;
 				number_of_slashes++;
-			}
-			if (back_track_position == 0)
-			{
-				return ERROR_WRONG_JSON_STRUCTURE;
 			}
 
 			if (number_of_slashes % 2 == 0)
@@ -142,10 +134,6 @@ unsigned char* get_string(unsigned char* stream, int* position_name_end, unsigne
 			{
 				back_track_position--;
 				number_of_slashes++;
-			}
-			if (back_track_position == 0)
-			{
-				return NULL;
 			}
 
 			if (number_of_slashes % 2 == 0)
@@ -274,7 +262,7 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 			}
 			memcpy(value, "true", 4);
 			value[4] = '\0';
-			*position_value_end = counter + 4;
+			*position_value_end = counter + 3;
 			return value;
 		}
 		else
@@ -293,7 +281,7 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 			}
 			memcpy(value, "false", 5);
 			value[5] = '\0';
-			*position_value_end = counter + 5;
+			*position_value_end = counter + 4;
 			return value;
 		}
 		else
@@ -305,7 +293,7 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 		if (!memcmp(stream + counter, "null", 4))
 		{
 			*value_id = VALUE_NULL;
-			*position_value_end = counter + 4;
+			*position_value_end = counter + 3;
 			return NULL;
 		}
 		else
@@ -350,7 +338,7 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 		unsigned int length_of_string = 0;
 		unsigned int local_position_value_end = 0;
 		unsigned char* value_as_string = parse_value(value_as_string_input + position_value_end + 1, &value_id, &local_position_value_end, length - position_value_end, &length_of_string);
-		if (value_as_string == NULL)
+		if (value_as_string == NULL && value_id != VALUE_NULL)
 		{
 			return NULL;
 		}
@@ -467,7 +455,7 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 	unsigned int is_object_empty = 1;
 	for (unsigned int i = 1; i < end_bracket_position - counter; i++)
 	{
-		if (stream[counter + i] > 32)
+		if (stream[counter + i] > 32 || (end_bracket_position - counter) == 1)
 		{
 			is_object_empty = 0;
 			break;
@@ -496,6 +484,8 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 		if (is_object_empty == 1)
 		{
 			((json_object->obj)[json_object->number_of_values - 1]).value_identifier = EMPTY_OBJECT;
+			is_object_empty = 0;
+			position_value_end--;
 		}
 		else
 		{
@@ -617,7 +607,10 @@ void free_object_memory(object* obj)
 		unsigned int i = 0;
 		for (i = 0; i < obj->number_of_values; i++)
 		{
-			free_object_memory(&(obj->obj[i]));
+			if (&(obj->obj[i]) != NULL)
+			{
+				free_object_memory(&(obj->obj[i]));
+			}
 		}
 	}
 
@@ -650,7 +643,7 @@ unsigned int json_parse(char* fileName)
 	printf("JSON Parser!\n");
 	unsigned char* stream;
 	FILE* file;
-	file = fopen(fileName, "rb");
+	fopen_s(&file, fileName, "rb");
 	if (file == NULL)
 	{
 		return ERROR_CAN_NOT_OPEN_FILE;
