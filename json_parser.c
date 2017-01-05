@@ -3,6 +3,9 @@
 #include "json_number.h"
 #include "json_parser.h"
 
+#define CONTROL_CHARS 32
+#define OBJ_NAME_SIZE 12
+
 unsigned int find_bracket_pair_object(unsigned char* stream, unsigned int length_of_stream, unsigned int* end_position)
 {
 	unsigned int number_of_opened_brackets = 1;
@@ -109,7 +112,7 @@ unsigned int find_bracket_pair_array(unsigned char* stream, unsigned int length_
 unsigned char* get_string(unsigned char* stream, int* position_name_end, unsigned int length_of_stream)
 {
 	unsigned int counter = 0;
-	while (stream[counter] <= 32 && counter < length_of_stream)
+	while (stream[counter] <= CONTROL_CHARS && counter < length_of_stream)
 	{
 		counter++;
 	}
@@ -166,7 +169,7 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 {
 	unsigned int counter = 0;
 
-	while (stream[counter] <= 32 && counter < length_of_stream)
+	while (stream[counter] <= CONTROL_CHARS && counter < length_of_stream)
 	{
 		counter++;
 	}
@@ -632,14 +635,14 @@ unsigned int json_parse(char* fileName)
 	json_object.value_identifier = OBJECT;
 	json_object.value_string = NULL;
 	json_object.value_int = 0;
-	json_object.name = malloc(12);
+	json_object.name = malloc(OBJ_NAME_SIZE);
 	if (json_object.name == NULL)
 	{
 		return ERROR_CAN_NOT_ALLOCATE_MEMORY;
 	}
 
 	char name[] = "main_object\0";
-	memcpy(json_object.name, name, 12);
+	memcpy(json_object.name, name, OBJ_NAME_SIZE);
 	printf("JSON Parser!\n");
 	unsigned char* stream;
 	FILE* file;
