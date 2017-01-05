@@ -1,5 +1,7 @@
 #include "json_string.h"
 
+#define HEXA_DIGITS 4
+
 int validate_string(char* in, char* out, int length)
 {
     if (strlen(in) != length)
@@ -37,9 +39,9 @@ int validate_string(char* in, char* out, int length)
 
                     offset--; //We are writing the same number of symbols as we read
                     char hexChar;
-                    for (int j = 1; j < 5; j++) //checks validity of hex symbols (0-9, a-f, A-F)
+                    for (int j = 0; j < HEXA_DIGITS; j++) //checks validity of hex symbols (0-9, a-f, A-F)
                     {
-                        hexChar = in[i+j];
+                        hexChar = in[i+j+1];
                         if ( hexChar < '0' || hexChar > 'f'  ||
                             (hexChar > '9' && hexChar < 'A') ||
                             (hexChar > 'F' && hexChar < 'a'))
