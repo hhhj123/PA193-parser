@@ -2,8 +2,9 @@
 
 int validate_number(char* in, double* outd, long int* outl, int length)
 {
-    if (strlen(in) != length || strlen(in) == 0)
+    if (strlen(in) != length || strlen(in) == 0) {
         return INVALID_INPUT;
+    }
 
     long int outLong;
     double outDouble;
@@ -45,8 +46,9 @@ int validate_number(char* in, double* outd, long int* outl, int length)
         //strtol return 0 if can't convert.
         //Shouldn't happen, since we checked if only valid characters are there.
 
-        if (errno == ERANGE)
+        if (errno == ERANGE) {
             return INVALID_NUMBER;
+        }
 
         *outl = outLong;
     }
@@ -58,8 +60,9 @@ int validate_number(char* in, double* outd, long int* outl, int length)
         //strtod returns 0.0 if can't convert.
         //Shouldn't happen, since we checked if only valid characters are there.
 
-        if (errno == ERANGE)
+        if (errno == ERANGE) {
             return INVALID_NUMBER;
+        }
 
         *outd = outDouble;
     }
