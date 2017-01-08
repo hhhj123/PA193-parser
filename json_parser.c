@@ -324,7 +324,7 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 		obj = (object*)realloc(obj, ++(*number_of_values) * sizeof(object));
 		if (obj == NULL)
 		{
-			free(obj);
+			(*number_of_values)--;
 			return NULL;
 		}
 
@@ -470,8 +470,7 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 		json_object->obj = (object*)realloc(json_object->obj, ++json_object->number_of_values * sizeof(object));
 		if (json_object->obj == NULL)
 		{
-			free(json_object->obj);
-			json_object->obj = NULL;
+			json_object->number_of_values--;
 			return ERROR_CAN_NOT_ALLOCATE_MEMORY;
 		}
 
@@ -644,11 +643,12 @@ unsigned int json_parse(char* fileName)
 	char name[] = "main_object\0";
 	memcpy(json_object.name, name, OBJ_NAME_SIZE);
 	printf("JSON Parser!\n");
-	unsigned char* stream;
+	
 	FILE* file;
 	fopen_s(&file, fileName, "rb");
 	if (file == NULL)
 	{
+		free(json_object.name);
 		return ERROR_CAN_NOT_OPEN_FILE;
 	}
 
@@ -669,6 +669,8 @@ unsigned int json_parse(char* fileName)
 	if (possible_overflow == 1)
 	{
 		fclose(file);
+		free_object_memory(&json_object);
+
 		return UNDEFINED_ERROR;
 	}
 
@@ -676,7 +678,13 @@ unsigned int json_parse(char* fileName)
 	unsigned int sz = ftell(file);
 	fseek(file, 0L, SEEK_SET);
 	rewind(file);
+	unsigned char* stream;
 	stream = (unsigned char*)malloc((sz + 1) * sizeof(char));
+	if (stream == NULL)
+	{
+		fclose(file);
+		free_object_memory(&json_object);
+	}
 	memset(stream, '\0', sz + 1);
 	fread(stream, 1, sz, file);
 	fclose(file);
@@ -684,6 +692,7 @@ unsigned int json_parse(char* fileName)
 	if (parse_object(stream, &json_object, sz, &position_of_last_character) != RETURN_OK)
 	{
 		free_object_memory(&json_object);
+		free(stream);
 		return UNDEFINED_ERROR;
 	}
 	free(stream);
