@@ -321,12 +321,14 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 	unsigned char* output;
 	while (1)
 	{
-		obj = (object*)realloc(obj, ++(*number_of_values) * sizeof(object));
-		if (obj == NULL)
+		object* tmp_memory = (object*)realloc(obj, ++(*number_of_values) * sizeof(object));
+		if (tmp_memory == NULL)
 		{
 			(*number_of_values)--;
+			free_object_memory(obj);
 			return NULL;
 		}
+		obj = tmp_memory;
 
 		(obj[(*number_of_values) - 1]).obj = NULL;
 		(obj[(*number_of_values) - 1]).name = NULL;
@@ -440,10 +442,12 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 	unsigned int length_of_string = 0;
 	unsigned int counter = 0;
 	unsigned int error_code = DEFAULT_VALUE;
-	while (stream[counter] != '{' && counter < length_of_stream && stream[counter] <= 32)
+	
+	while (stream[counter] != '{' && counter < length_of_stream && stream[counter] <= CONTROL_CHARS)
 	{
 		counter++;
 	}
+	
 	if (counter == length_of_stream || stream[counter] != '{')
 	{
 		return ERROR_WRONG_JSON_STRUCTURE;
@@ -458,7 +462,7 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 	unsigned int is_object_empty = 1;
 	for (unsigned int i = 1; i < end_bracket_position - counter; i++)
 	{
-		if (stream[counter + i] > 32 || (end_bracket_position - counter) == 1)
+		if (stream[counter + i] > CONTROL_CHARS || (end_bracket_position - counter) == 1)
 		{
 			is_object_empty = 0;
 			break;
@@ -467,12 +471,14 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 
 	while (1)
 	{
-		json_object->obj = (object*)realloc(json_object->obj, ++json_object->number_of_values * sizeof(object));
-		if (json_object->obj == NULL)
+		object* tmp_memory = (object*)realloc(json_object->obj, ++json_object->number_of_values * sizeof(object));
+		if (tmp_memory == NULL)
 		{
 			json_object->number_of_values--;
 			return ERROR_CAN_NOT_ALLOCATE_MEMORY;
 		}
+
+		json_object->obj = tmp_memory;
 
 		((json_object->obj)[json_object->number_of_values - 1]).obj = NULL;
 		((json_object->obj)[json_object->number_of_values - 1]).name = NULL;
@@ -499,10 +505,11 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 			position_name_end += counter + 2;
 			((json_object->obj)[json_object->number_of_values - 1]).name = name;
 
-			while (stream[position_name_end] <= 32 && position_name_end != length_of_stream)
+			while (stream[position_name_end] <= CONTROL_CHARS && position_name_end != length_of_stream)
 			{
 				position_name_end++;
 			}
+
 			if ((stream[position_name_end] != ':') || (position_name_end == length_of_stream))
 			{
 				return ERROR_WRONG_JSON_STRUCTURE;
@@ -511,8 +518,9 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 			unsigned char* value_as_string = parse_value(stream + position_name_end + 1, &value_id, &position_value_end, length_of_stream - (position_name_end + 1), &length_of_string);
 			if (value_as_string == NULL && value_id != VALUE_NULL)
 			{
-				return ERROR_FAIL_GET_NAME;
+				return ERROR_WRONG_JSON_STRUCTURE;
 			}
+
 			position_value_end += position_name_end + 1;
 			((json_object->obj)[json_object->number_of_values - 1]).value_identifier = value_id;
 			unsigned char* output = NULL;
@@ -555,8 +563,10 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 				}
 				else
 				{
+					free(value_as_string);
 					return ERROR_WRONG_JSON_STRUCTURE;
 				}
+				free(value_as_string);
 				break;
 			case ARRAY:
 				((json_object->obj)[json_object->number_of_values - 1]).obj = parse_array(value_as_string, length_of_string, &((json_object->obj)[json_object->number_of_values - 1]).number_of_values);
@@ -565,16 +575,18 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 					free(value_as_string);
 					return ERROR_WRONG_JSON_STRUCTURE;
 				}
+				free(value_as_string);
 				break;
 			case OBJECT:
 				if (parse_object(value_as_string, &((json_object->obj)[json_object->number_of_values - 1]), length_of_stream - position_value_end, &position_value_end) != RETURN_OK)
-				{
+				{					
 					return ERROR_WRONG_JSON_STRUCTURE;
-				}
+				}				
 				break;
 			case VALUE_NULL:
 				if (value_as_string != NULL)
 				{
+					free(value_as_string);
 					return ERROR_WRONG_JSON_STRUCTURE;
 				}
 				break;
@@ -678,12 +690,12 @@ unsigned int json_parse(char* fileName)
 	unsigned int sz = ftell(file);
 	fseek(file, 0L, SEEK_SET);
 	rewind(file);
-	unsigned char* stream;
-	stream = (unsigned char*)malloc((sz + 1) * sizeof(char));
+	unsigned char* stream = (unsigned char*)malloc((sz + 1) * sizeof(char));
 	if (stream == NULL)
 	{
 		fclose(file);
 		free_object_memory(&json_object);
+		return ERROR_CAN_NOT_ALLOCATE_MEMORY;
 	}
 	memset(stream, '\0', sz + 1);
 	fread(stream, 1, sz, file);
