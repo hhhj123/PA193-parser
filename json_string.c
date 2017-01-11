@@ -4,6 +4,11 @@
 
 int validate_string(char* in, char* out, int length)
 {
+    if (in == NULL)
+    {
+        return INVALID_INPUT;
+    }
+    
     if (strlen(in) != length)
     {
         return INVALID_INPUT;
