@@ -2,8 +2,14 @@
 
 int validate_number(char* in, double* outd, long int* outl, int length)
 {
-    if (strlen(in) != length || strlen(in) == 0)
+    if (in == NULL)
+    {
         return INVALID_INPUT;
+    }
+    if (strlen(in) != length || strlen(in) == 0)
+    {
+        return INVALID_INPUT;
+    }
 
     long int outLong;
     double outDouble;
@@ -18,7 +24,7 @@ int validate_number(char* in, double* outd, long int* outl, int length)
         //check if all characters are valid, and if it should be parsed as long int or double
         switch(in[i])
         {
-			//simple digits
+	    //simple digits
             case '0' :
             case '1' :
             case '2' :
@@ -92,7 +98,9 @@ int validate_number(char* in, double* outd, long int* outl, int length)
         //Shouldn't happen, since we checked if only valid characters are there.
 
         if (errno == ERANGE)
+	{
             return INVALID_NUMBER;
+	}
 
         *outd = outDouble;
     }
