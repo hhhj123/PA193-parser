@@ -709,5 +709,6 @@ unsigned int json_parse(char* fileName)
 	}
 	free(stream);
 	free_object_memory(&json_object);
+
 	return RETURN_OK;
 }
