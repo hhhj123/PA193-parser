@@ -31,7 +31,7 @@ unsigned int parse_object(unsigned char*, object*, unsigned int, unsigned int*);
  * @param length the length of string containing array
  * @param number_of_values number of values stored in array
  */
-object* parse_array(unsigned char*, unsigned int, unsigned int*);
+object* parse_array(unsigned char*, unsigned int, unsigned int*, int*);
 
 /**
  * @brief takes the string and selects which type of value is stored there
@@ -56,7 +56,7 @@ unsigned char* get_string(unsigned char*, int*, unsigned int);
  * @param stream input stream
  * @param length of stream total length of input stream
  */
-unsigned int find_bracket_pair_array(unsigned char*, unsigned int);
+unsigned int find_bracket_pair_array(unsigned char*, unsigned int, unsigned int*);
 
 /**
  * @brief finds pair of brackets of object { }
@@ -71,6 +71,13 @@ unsigned int find_bracket_pair_object(unsigned char*, unsigned int, unsigned int
  * @param obj root object in the structure
  */
 void free_object_memory(object*);
+
+/**
+ *@brief frees the memory of object array 
+  @param obj array of objects
+  @param number_of_objects number of objects in array
+ */
+void free_array_memory(object*, int);
 
 /**
  * @brief invokes the parsing

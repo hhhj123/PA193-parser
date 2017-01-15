@@ -60,7 +60,7 @@ unsigned int find_bracket_pair_object(unsigned char* stream, unsigned int length
 	return RETURN_OK;
 }
 
-unsigned int find_bracket_pair_array(unsigned char* stream, unsigned int length_of_stream)
+unsigned int find_bracket_pair_array(unsigned char* stream, unsigned int length_of_stream, unsigned int* end_position)
 {
 	unsigned int number_of_opened_brackets = 1;
 	unsigned int position = 0;
@@ -106,7 +106,12 @@ unsigned int find_bracket_pair_array(unsigned char* stream, unsigned int length_
 			break;
 		}
 	}
-	return position;
+	if (position == length_of_stream)
+	{
+		return ERROR_WRONG_JSON_STRUCTURE;
+	}
+	*end_position = position;
+	return RETURN_OK;
 }
 
 unsigned char* get_string(unsigned char* stream, int* position_name_end, unsigned int length_of_stream)
@@ -240,7 +245,11 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 		break;
 	case '[':
 		*value_id = ARRAY;
-		unsigned int end_array_bracket = find_bracket_pair_array(stream + counter, length_of_stream - counter);
+		unsigned int end_array_bracket;
+		if (find_bracket_pair_array(stream + counter, length_of_stream - counter, &end_array_bracket) != RETURN_OK)
+		{
+			return NULL;
+		}
 
 		*position_value_end = counter + end_array_bracket;
 		unsigned char* array_as_string = malloc(end_array_bracket + 2);
@@ -311,7 +320,7 @@ unsigned char* parse_value(unsigned char* stream, int* value_id, unsigned int* p
 	return NULL;
 }
 
-object* parse_array(unsigned char* value_as_string_input, unsigned int length, unsigned int* number_of_values)
+object* parse_array(unsigned char* value_as_string_input, unsigned int length, unsigned int* number_of_values, int* is_array_empty)
 {
 	object* obj = NULL;
 	unsigned int counter = 0;
@@ -319,13 +328,28 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 	unsigned int position_value_end = 0;
 	unsigned int error_code = 0;
 	unsigned char* output;
+
+
+	for (unsigned int i = 1; i < length; i++)
+	{
+		if (value_as_string_input[i] > CONTROL_CHARS && i == length - 1)
+		{
+			*is_array_empty = 1;
+			return NULL;
+		}
+		if (value_as_string_input[i] > CONTROL_CHARS)
+		{
+			break;
+		}
+	}
+
 	while (1)
 	{
 		object* tmp_memory = (object*)realloc(obj, ++(*number_of_values) * sizeof(object));
 		if (tmp_memory == NULL)
 		{
 			(*number_of_values)--;
-			free_object_memory(obj);
+			free_array_memory(obj, *number_of_values);
 			return NULL;
 		}
 		obj = tmp_memory;
@@ -344,12 +368,14 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 		unsigned int local_position_value_end = 0;
 		unsigned char* value_as_string = parse_value(value_as_string_input + position_value_end + 1, &value_id, &local_position_value_end, length - position_value_end, &length_of_string);
 		if (value_as_string == NULL && value_id != VALUE_NULL)
-		{
+		{			
+			free_array_memory(obj, *number_of_values);
 			return NULL;
 		}
 
 		position_value_end += local_position_value_end + 1;
 		(obj[(*number_of_values) - 1]).value_identifier = value_id;
+		int is_array_empty = 0;
 
 		switch (value_id)
 		{
@@ -357,11 +383,13 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 			output = malloc(length_of_string + 1);
 			if (output == NULL)
 			{
+				free_array_memory(obj, *number_of_values);
 				free(value_as_string);
 				return NULL;
 			}
 			if (validate_string(value_as_string, output, length_of_string) != RETURN_OK)
 			{
+				free_array_memory(obj, *number_of_values);
 				free(value_as_string);
 				return NULL;
 			}
@@ -372,6 +400,7 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 			error_code = validate_number(value_as_string, &((obj[(*number_of_values) - 1]).value_double), &((obj[(*number_of_values) - 1]).value_int), length_of_string);
 			if (error_code != DOUBLE || error_code != LONG_INT)
 			{
+				free_array_memory(obj, *number_of_values);
 				free(value_as_string);
 				return NULL;
 			}
@@ -389,26 +418,39 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 			}
 			else
 			{
+				free_array_memory(obj, *number_of_values);
 				return NULL;
 			}
 			break;
 		case ARRAY:
-			(obj[(*number_of_values) - 1]).obj = parse_array(value_as_string, length_of_string, &(obj[(*number_of_values) - 1]).number_of_values);
+			(obj[(*number_of_values) - 1]).obj = parse_array(value_as_string, length_of_string, &(obj[(*number_of_values) - 1]).number_of_values, &is_array_empty);
 			if ((obj[(*number_of_values) - 1]).obj == NULL)
 			{
-				free(value_as_string);
-				return NULL;
+				if (is_array_empty == 1)
+				{
+					(obj[(*number_of_values) - 1]).value_identifier = EMPTY_ARRAY;
+					(obj[(*number_of_values) - 1]).number_of_values = 0;
+				}
+				else
+				{
+					free(value_as_string);
+					(obj[(*number_of_values) - 1]).number_of_values = 0;
+					free_array_memory(obj, *number_of_values);
+					return NULL;
+				}
 			}
 			break;
 		case OBJECT:
 			if (parse_object(value_as_string, &(obj[(*number_of_values) - 1]), length, &position_value_end) != RETURN_OK)
 			{
+				free_array_memory(obj, *number_of_values);
 				return NULL;
 			}
 			break;
 		case VALUE_NULL:
 			if (value_as_string != NULL)
 			{
+				free_array_memory(obj, *number_of_values);
 				return NULL;
 			}
 			break;
@@ -417,12 +459,13 @@ object* parse_array(unsigned char* value_as_string_input, unsigned int length, u
 		}
 
 		counter = position_value_end + 1;
-		while (value_as_string_input[counter] != ']' && value_as_string_input[counter] != ',' && counter < length)
+		while (value_as_string_input[counter] <= CONTROL_CHARS && counter < length)
 		{
 			counter++;
 		}
-		if (counter == length)
+		if (counter == length && value_as_string_input[counter] != ']' && value_as_string_input[counter] != ',')
 		{
+			free_array_memory(obj, *number_of_values);
 			return NULL;
 		}
 		position_value_end = counter;
@@ -462,11 +505,20 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 	unsigned int is_object_empty = 1;
 	for (unsigned int i = 1; i < end_bracket_position - counter; i++)
 	{
-		if (stream[counter + i] > CONTROL_CHARS || (end_bracket_position - counter) == 1)
+		if (stream[counter + i] > CONTROL_CHARS)
 		{
 			is_object_empty = 0;
 			break;
 		}
+	}
+	
+	if (is_object_empty == 1)
+	{
+		json_object->value_identifier = EMPTY_OBJECT;
+		json_object->number_of_values = 0;
+		*end_pos += end_bracket_position;
+		
+		return RETURN_OK;
 	}
 
 	while (1)
@@ -487,113 +539,116 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 		((json_object->obj)[json_object->number_of_values - 1]).value_double = 0.0;
 		((json_object->obj)[json_object->number_of_values - 1]).value_identifier = DEFAULT_VALUE;
 		((json_object->obj)[json_object->number_of_values - 1]).value_string = NULL;
-		((json_object->obj)[json_object->number_of_values - 1]).value_int = 0;
-
-		if (is_object_empty == 1)
+		((json_object->obj)[json_object->number_of_values - 1]).value_int = 0;	
+		
+		unsigned char* name = get_string(stream + counter + 1, &position_name_end, length_of_stream - counter - 1);
+		if (name == NULL)
 		{
-			((json_object->obj)[json_object->number_of_values - 1]).value_identifier = EMPTY_OBJECT;
-			is_object_empty = 0;
-			position_value_end--;
+			return ERROR_FAIL_GET_NAME;
 		}
-		else
+		position_name_end += counter + 2;
+		((json_object->obj)[json_object->number_of_values - 1]).name = name;
+
+		while (stream[position_name_end] <= CONTROL_CHARS && position_name_end != length_of_stream)
 		{
-			unsigned char* name = get_string(stream + counter + 1, &position_name_end, length_of_stream - counter - 1);
-			if (name == NULL)
-			{
-				return ERROR_FAIL_GET_NAME;
-			}
-			position_name_end += counter + 2;
-			((json_object->obj)[json_object->number_of_values - 1]).name = name;
+			position_name_end++;
+		}
 
-			while (stream[position_name_end] <= CONTROL_CHARS && position_name_end != length_of_stream)
-			{
-				position_name_end++;
-			}
+		if ((stream[position_name_end] != ':') || (position_name_end == length_of_stream))
+		{
+			return ERROR_WRONG_JSON_STRUCTURE;
+		}
 
-			if ((stream[position_name_end] != ':') || (position_name_end == length_of_stream))
+		unsigned char* value_as_string = parse_value(stream + position_name_end + 1, &value_id, &position_value_end, length_of_stream - (position_name_end + 1), &length_of_string);
+		if (value_as_string == NULL && value_id != VALUE_NULL)
+		{
+			return ERROR_WRONG_JSON_STRUCTURE;
+		}
+
+		position_value_end += position_name_end + 1;
+		((json_object->obj)[json_object->number_of_values - 1]).value_identifier = value_id;
+		unsigned char* output = NULL;
+		int is_array_empty = 0;
+
+		switch (value_id)
+		{
+		case STRING:
+			output = malloc(length_of_string + 1);
+			if (output == NULL)
 			{
+				free(value_as_string);
+				return ERROR_CAN_NOT_ALLOCATE_MEMORY;
+			}
+			if (validate_string(value_as_string, output, length_of_string) != RETURN_OK)
+			{
+				free(value_as_string);
 				return ERROR_WRONG_JSON_STRUCTURE;
 			}
-
-			unsigned char* value_as_string = parse_value(stream + position_name_end + 1, &value_id, &position_value_end, length_of_stream - (position_name_end + 1), &length_of_string);
-			if (value_as_string == NULL && value_id != VALUE_NULL)
+			((json_object->obj)[json_object->number_of_values - 1]).value_string = output;
+			free(value_as_string);
+			break;
+		case NUMBER:
+			error_code = validate_number(value_as_string, &(((json_object->obj)[json_object->number_of_values - 1]).value_double), &(((json_object->obj)[json_object->number_of_values - 1]).value_int), length_of_string);
+			if (error_code != DOUBLE && error_code != LONG_INT)
 			{
-				return ERROR_WRONG_JSON_STRUCTURE;
+				free(value_as_string);
+				return error_code;
 			}
 
-			position_value_end += position_name_end + 1;
-			((json_object->obj)[json_object->number_of_values - 1]).value_identifier = value_id;
-			unsigned char* output = NULL;
-
-			switch (value_id)
+			free(value_as_string);
+			break;
+		case BOOL:
+			if (memcmp(value_as_string, "true", 4) == 0)
 			{
-			case STRING:
-				output = malloc(length_of_string + 1);
-				if (output == NULL)
-				{
-					free(value_as_string);
-					return ERROR_CAN_NOT_ALLOCATE_MEMORY;
-				}
-				if (validate_string(value_as_string, output, length_of_string) != RETURN_OK)
-				{
-					free(value_as_string);
-					return ERROR_WRONG_JSON_STRUCTURE;
-				}
-				((json_object->obj)[json_object->number_of_values - 1]).value_string = output;
+				((json_object->obj)[json_object->number_of_values - 1]).value_bool = TRUE;
+			}
+			else if (memcmp(value_as_string, "false", 5) == 0)
+			{
+				((json_object->obj)[json_object->number_of_values - 1]).value_bool = FALSE;
+			}
+			else
+			{
 				free(value_as_string);
-				break;
-			case NUMBER:
-				error_code = validate_number(value_as_string, &(((json_object->obj)[json_object->number_of_values - 1]).value_double), &(((json_object->obj)[json_object->number_of_values - 1]).value_int), length_of_string);
-				if (error_code != DOUBLE && error_code != LONG_INT)
+				return ERROR_WRONG_JSON_STRUCTURE;
+			}
+			free(value_as_string);
+			break;
+		case ARRAY:				
+			((json_object->obj)[json_object->number_of_values - 1]).obj = parse_array(value_as_string, length_of_string, &((json_object->obj)[json_object->number_of_values - 1]).number_of_values, &is_array_empty);
+			if (((json_object->obj)[json_object->number_of_values - 1]).obj == NULL)
+			{
+				if (is_array_empty == 1)
 				{
-					free(value_as_string);
-					return error_code;
-				}
-
-				free(value_as_string);
-				break;
-			case BOOL:
-				if (memcmp(value_as_string, "true", 4) == 0)
-				{
-					((json_object->obj)[json_object->number_of_values - 1]).value_bool = TRUE;
-				}
-				else if (memcmp(value_as_string, "false", 5) == 0)
-				{
-					((json_object->obj)[json_object->number_of_values - 1]).value_bool = FALSE;
+					((json_object->obj)[json_object->number_of_values - 1]).value_identifier = EMPTY_ARRAY;
+					((json_object->obj)[json_object->number_of_values - 1]).number_of_values = 0;
 				}
 				else
 				{
 					free(value_as_string);
+					((json_object->obj)[json_object->number_of_values - 1]).number_of_values = 0;
 					return ERROR_WRONG_JSON_STRUCTURE;
 				}
-				free(value_as_string);
-				break;
-			case ARRAY:
-				((json_object->obj)[json_object->number_of_values - 1]).obj = parse_array(value_as_string, length_of_string, &((json_object->obj)[json_object->number_of_values - 1]).number_of_values);
-				if (((json_object->obj)[json_object->number_of_values - 1]).obj == NULL)
-				{
-					free(value_as_string);
-					return ERROR_WRONG_JSON_STRUCTURE;
-				}
-				free(value_as_string);
-				break;
-			case OBJECT:
-				if (parse_object(value_as_string, &((json_object->obj)[json_object->number_of_values - 1]), length_of_stream - position_value_end, &position_value_end) != RETURN_OK)
-				{					
-					return ERROR_WRONG_JSON_STRUCTURE;
-				}				
-				break;
-			case VALUE_NULL:
-				if (value_as_string != NULL)
-				{
-					free(value_as_string);
-					return ERROR_WRONG_JSON_STRUCTURE;
-				}
-				break;
-			default:
-				break;
 			}
-		}
+				
+
+			free(value_as_string);
+			break;
+		case OBJECT:
+			if (parse_object(value_as_string, &((json_object->obj)[json_object->number_of_values - 1]), length_of_stream - position_value_end, &position_value_end) != RETURN_OK)
+			{					
+				return ERROR_WRONG_JSON_STRUCTURE;
+			}				
+			break;
+		case VALUE_NULL:
+			if (value_as_string != NULL)
+			{
+				free(value_as_string);
+				return ERROR_WRONG_JSON_STRUCTURE;
+			}
+			break;
+		default:
+			break;
+		}		
 
 		counter = position_value_end + 1;
 		while (stream[counter] != '}' && stream[counter] != ',' && counter < length_of_stream)
@@ -612,6 +667,14 @@ unsigned int parse_object(unsigned char* stream, object* json_object, unsigned i
 		}
 	}
 	return ERROR_WRONG_JSON_STRUCTURE;
+}
+
+void free_array_memory(object* obj, int number_of_objects)
+{
+	for (int i = 0; i < number_of_objects; i++)
+	{
+		free_object_memory(&obj[i]);
+	}
 }
 
 void free_object_memory(object* obj)
